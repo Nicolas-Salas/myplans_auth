@@ -1,8 +1,13 @@
 package com.myplans.auth.controller;
 
+import com.myplans.auth.dto.UserRegisterDTO;
 import com.myplans.auth.entity.Role;
 import com.myplans.auth.entity.User;
 import com.myplans.auth.service.UserService;
+
+import jakarta.validation.Valid;
+
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -64,5 +69,29 @@ public class AdminController {
             error.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(error);
         }
+    }
+
+    // Crear usuario
+    @PostMapping("/users")
+    public ResponseEntity<User> createUser(@Valid @RequestBody UserRegisterDTO dto) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(userService.adminCreateUser(dto));
+    }
+
+    // Editar información básica
+    @PutMapping("/users/{id}")
+    public ResponseEntity<Map<String, String>> updateEmail(@PathVariable Long id, @RequestParam String email) {
+        userService.updateUserEmail(id, email);
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "Usuario actualizado correctamente");
+        return ResponseEntity.ok(response);
+    }
+
+    // Quitar un permiso específico
+    @DeleteMapping("/users/{userId}/roles/{roleName}")
+    public ResponseEntity<Map<String, String>> revokeRole(@PathVariable Long userId, @PathVariable String roleName) {
+        userService.revokeRoleFromUser(userId, roleName);
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "Rol " + roleName + " revocado al usuario " + userId);
+        return ResponseEntity.ok(response);
     }
 }
