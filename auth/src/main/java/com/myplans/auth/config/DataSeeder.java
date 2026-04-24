@@ -23,18 +23,19 @@ public class DataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        Role adminRole = roleRepository.findByName("ROLE_ADMIN")
+        Role adminRole = roleRepository.findByNombre("ROLE_ADMIN")
                 .orElseGet(() -> roleRepository.save(new Role(null, "ROLE_ADMIN")));
-        Role userRole = roleRepository.findByName("ROLE_USER")
+        Role userRole = roleRepository.findByNombre("ROLE_USER")
                 .orElseGet(() -> roleRepository.save(new Role(null, "ROLE_USER")));
-        Role auditorRole = roleRepository.findByName("ROLE_AUDITOR")
+        Role auditorRole = roleRepository.findByNombre("ROLE_AUDITOR")
                 .orElseGet(() -> roleRepository.save(new Role(null, "ROLE_AUDITOR")));
 
         if (!userRepository.existsByEmail("admin@myplans.com")) {
             User admin = new User();
             admin.setEmail("admin@myplans.com");
+            admin.setNombreCompleto("Administrador Maestro");
             admin.setPassword(passwordEncoder.encode("PasswordSegura123!")); 
-            admin.getRoles().add(adminRole);
+            admin.setRole(adminRole);
             
             userRepository.save(admin);
             System.out.println("✅ SEMILLA: Administrador maestro creado con éxito (admin@myplans.com)");

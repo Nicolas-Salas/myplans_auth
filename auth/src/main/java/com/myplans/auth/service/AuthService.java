@@ -2,9 +2,14 @@ package com.myplans.auth.service;
 
 import com.myplans.auth.dto.AuthResponseDTO;
 import com.myplans.auth.dto.LoginRequestDTO;
+import com.myplans.auth.dto.ModulePermissionDTO;
 import com.myplans.auth.dto.UserRegisterDTO;
+import com.myplans.auth.entity.Modulo;
 import com.myplans.auth.entity.Role;
+import com.myplans.auth.entity.RoleModulo;
 import com.myplans.auth.entity.User;
+import com.myplans.auth.entity.PasswordResetToken;
+import com.myplans.auth.repository.PasswordResetTokenRepository;
 import com.myplans.auth.repository.RoleRepository;
 import com.myplans.auth.repository.UserRepository;
 import com.myplans.auth.security.JwtUtil;
@@ -14,14 +19,13 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import com.myplans.auth.entity.PasswordResetToken;
-import com.myplans.auth.repository.PasswordResetTokenRepository;
-import java.time.LocalDateTime;
-import java.util.UUID;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.HashSet;
-import java.util.Set;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class AuthService {
@@ -53,6 +57,7 @@ public class AuthService {
         this.emailService = emailService;
     }
 
+    @Transactional
     public void registerUser(UserRegisterDTO registerDTO) {
         if (userRepository.existsByEmail(registerDTO.getEmail())) {
             throw new RuntimeException("El email ya está registrado");
@@ -61,20 +66,20 @@ public class AuthService {
         User user = new User();
         user.setEmail(registerDTO.getEmail());
         user.setPassword(passwordEncoder.encode(registerDTO.getPassword()));
+        user.setNombreCompleto(registerDTO.getEmail()); 
+        user.setIsActive(true);
 
-        Set<Role> roles = new HashSet<>();
+        Role assignedRole;
         if (registerDTO.getRoles() == null || registerDTO.getRoles().isEmpty()) {
-            Role userRole = roleRepository.findByName("ROLE_USER")
-                    .orElseThrow(() -> new RuntimeException("Error: Role no encontrado."));
-            roles.add(userRole);
+            assignedRole = roleRepository.findByNombre("ROLE_USER")
+                    .orElseThrow(() -> new RuntimeException("Error: Rol base no encontrado."));
         } else {
-            registerDTO.getRoles().forEach(roleName -> {
-                Role role = roleRepository.findByName(roleName)
-                        .orElseThrow(() -> new RuntimeException("Error: Role " + roleName + " no encontrado."));
-                roles.add(role);
-            });
+            String roleName = registerDTO.getRoles().iterator().next();
+            assignedRole = roleRepository.findByNombre(roleName)
+                    .orElseThrow(() -> new RuntimeException("Error: Role " + roleName + " no encontrado."));
         }
-        user.setRoles(roles);
+        
+        user.setRole(assignedRole);
         userRepository.save(user);
     }
 
@@ -82,10 +87,39 @@ public class AuthService {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword()));
 
+        User user = userRepository.findByEmail(loginRequest.getEmail())
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                
         UserDetails userDetails = userDetailsService.loadUserByUsername(loginRequest.getEmail());
         String jwtToken = jwtUtil.generateToken(userDetails);
 
-        return new AuthResponseDTO(jwtToken, "Bearer", userDetails.getUsername());
+        List<ModulePermissionDTO> permisosFrontend = new ArrayList<>();
+        
+        if (user.getRole() != null && user.getRole().getPermisos() != null) {
+            Map<Modulo, List<RoleModulo>> agrupadosPorModulo = user.getRole().getPermisos().stream()
+                    .collect(Collectors.groupingBy(RoleModulo::getModulo));
+
+            agrupadosPorModulo.forEach((modulo, rolesModulos) -> {
+                List<String> acciones = rolesModulos.stream()
+                        .map(rm -> rm.getAcceso().getNombre())
+                        .collect(Collectors.toList());
+
+                permisosFrontend.add(new ModulePermissionDTO(
+                        modulo.getNombre(),
+                        modulo.getRutaFrontend(),
+                        acciones
+                ));
+            });
+        }
+
+        return new AuthResponseDTO(
+                jwtToken, 
+                "Bearer", 
+                user.getEmail(), 
+                user.getNombreCompleto(), 
+                user.getRole() != null ? user.getRole().getNombre() : "SIN_ROL",
+                permisosFrontend
+        );
     }
 
     @Transactional

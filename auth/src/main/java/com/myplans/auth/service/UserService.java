@@ -26,7 +26,6 @@ public class UserService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    // --- CRUD USUARIOS ---
     public List<User> getAllUsers() {
         return userRepository.findAll();
     }
@@ -39,7 +38,6 @@ public class UserService {
         userRepository.save(user);
     }
 
-    // --- CRUD ROLES ---
     public List<Role> getAllRoles() {
         return roleRepository.findAll();
     }
@@ -50,25 +48,23 @@ public class UserService {
         if (!formattedRoleName.startsWith("ROLE_")) {
             formattedRoleName = "ROLE_" + formattedRoleName;
         }
-        if (roleRepository.findByName(formattedRoleName).isPresent()) {
+        if (roleRepository.findByNombre(formattedRoleName).isPresent()) {
             throw new RuntimeException("El rol ya existe");
         }
         roleRepository.save(new Role(null, formattedRoleName));
     }
 
-    // --- ASIGNACIÓN DE ROLES (RBAC) ---
     @Transactional
     public void assignRoleToUser(Long userId, String roleName) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-        Role role = roleRepository.findByName(roleName)
+        Role role = roleRepository.findByNombre(roleName)
                 .orElseThrow(() -> new RuntimeException("Rol no encontrado"));
 
-        user.getRoles().add(role);
+        user.setRole(role);
         userRepository.save(user);
     }
 
-    // --- CREACIÓN DIRECTA POR ADMIN ---
     @Transactional
     public User adminCreateUser(UserRegisterDTO dto) {
         if (userRepository.existsByEmail(dto.getEmail())) {
@@ -77,39 +73,35 @@ public class UserService {
 
         User user = new User();
         user.setEmail(dto.getEmail());
+        user.setNombreCompleto(dto.getEmail());
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
         user.setIsActive(true);
 
         if (dto.getRoles() != null && !dto.getRoles().isEmpty()) {
-            dto.getRoles().forEach(roleName -> {
-                Role role = roleRepository.findByName(roleName)
-                        .orElseThrow(() -> new RuntimeException("Rol no encontrado: " + roleName));
-                user.getRoles().add(role);
-            });
+            String roleName = dto.getRoles().iterator().next();
+            Role role = roleRepository.findByNombre(roleName)
+                    .orElseThrow(() -> new RuntimeException("Rol no encontrado: " + roleName));
+            user.setRole(role);
         } else {
-            Role userRole = roleRepository.findByName("ROLE_USER")
+            Role userRole = roleRepository.findByNombre("ROLE_USER")
                     .orElseThrow(() -> new RuntimeException("Error: Rol base no encontrado"));
-            user.getRoles().add(userRole);
+            user.setRole(userRole);
         }
 
         return userRepository.save(user);
     }
 
-    // --- REVOCAR PERMISOS ---
     @Transactional
     public void revokeRoleFromUser(Long userId, String roleName) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-        Role role = roleRepository.findByName(roleName)
-                .orElseThrow(() -> new RuntimeException("El rol especificado no existe"));
-
-        if (user.getRoles().contains(role)) {
-            user.getRoles().remove(role);
-            userRepository.save(user);
-        }
+        Role userRole = roleRepository.findByNombre("ROLE_USER")
+                .orElseThrow(() -> new RuntimeException("Error: Rol base no encontrado"));
+        
+        user.setRole(userRole);
+        userRepository.save(user);
     }
 
-    // --- EDICIÓN DE USUARIO ---
     @Transactional
     public void updateUserEmail(Long userId, String newEmail) {
         User user = userRepository.findById(userId)
