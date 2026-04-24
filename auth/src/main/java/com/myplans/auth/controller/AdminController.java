@@ -1,8 +1,11 @@
 package com.myplans.auth.controller;
 
 import com.myplans.auth.dto.UserRegisterDTO;
+import com.myplans.auth.dto.PermissionRequestDTO;
 import com.myplans.auth.entity.Role;
 import com.myplans.auth.entity.User;
+import com.myplans.auth.entity.Modulo;
+import com.myplans.auth.entity.Acceso;
 import com.myplans.auth.service.UserService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,7 +27,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin")
 @PreAuthorize("hasRole('ADMIN')")
-// --- ANOTACIÓN DE SWAGGER PARA LA CLASE ---
 @Tag(name = "Administración (IAM)", description = "Endpoints protegidos para la gestión de ciclo de vida de usuarios, roles y privilegios. Requiere Token JWT con ROLE_ADMIN.")
 public class AdminController {
 
@@ -120,6 +122,42 @@ public class AdminController {
         userService.revokeRoleFromUser(userId, roleName);
         Map<String, String> response = new HashMap<>();
         response.put("message", "Rol " + roleName + " revocado al usuario " + userId);
+        return ResponseEntity.ok(response);
+    }
+
+    // --- ENDPOINTS MATRIZ DE PERMISOS  ---
+
+    @Operation(summary = "Listar todos los módulos", description = "Obtiene el catálogo de módulos (ej: Planos, Usuarios) para renderizar las filas de la matriz de permisos.")
+    @GetMapping("/modules")
+    public ResponseEntity<List<Modulo>> getAllModulos() {
+        return ResponseEntity.ok(userService.getAllModulos());
+    }
+
+    @Operation(summary = "Listar todos los tipos de acceso", description = "Obtiene los tipos de acceso (LEER, CREAR, EDITAR, ELIMINAR) para renderizar las columnas de la matriz de permisos.")
+    @GetMapping("/access-types")
+    public ResponseEntity<List<Acceso>> getAllAccesos() {
+        return ResponseEntity.ok(userService.getAllAccesos());
+    }
+
+    @Operation(summary = "Otorgar Permiso a Rol", description = "Asocia un nivel de acceso específico dentro de un módulo a un rol (Inserta en ROL_MODULO).")
+    @PostMapping("/roles/{idRol}/permissions")
+    public ResponseEntity<Map<String, String>> grantPermission(
+            @Parameter(description = "ID del Rol al que se le dará el permiso") @PathVariable Long idRol, 
+            @RequestBody PermissionRequestDTO dto) {
+        userService.grantPermissionToRole(idRol, dto.getIdModulo(), dto.getIdAcceso());
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "Permiso otorgado exitosamente al rol");
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Revocar Permiso a Rol", description = "Quita un nivel de acceso específico dentro de un módulo a un rol (Elimina de ROL_MODULO).")
+    @DeleteMapping("/roles/{idRol}/permissions")
+    public ResponseEntity<Map<String, String>> revokePermission(
+            @Parameter(description = "ID del Rol al que se le quitará el permiso") @PathVariable Long idRol, 
+            @RequestBody PermissionRequestDTO dto) {
+        userService.revokePermissionFromRole(idRol, dto.getIdModulo(), dto.getIdAcceso());
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "Permiso revocado exitosamente del rol");
         return ResponseEntity.ok(response);
     }
 }

@@ -2,9 +2,11 @@ package com.myplans.auth.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;
+import lombok.Setter;
 import java.io.Serializable;
 
 @Getter
+@Setter
 @Entity
 @Table(name = "ROL_MODULO")
 public class RoleModulo {
@@ -23,6 +25,7 @@ public class RoleModulo {
 
     @Embeddable
     @Getter
+    @Setter
     public static class RoleModuloId implements Serializable {
         @Column(name = "id_rol") private Long idRol;
         @Column(name = "id_modulo") private Long idModulo;

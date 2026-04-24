@@ -1,8 +1,14 @@
 package com.myplans.auth.service;
 
 import com.myplans.auth.dto.UserRegisterDTO;
+import com.myplans.auth.entity.Acceso;
+import com.myplans.auth.entity.Modulo;
 import com.myplans.auth.entity.Role;
+import com.myplans.auth.entity.RoleModulo;
 import com.myplans.auth.entity.User;
+import com.myplans.auth.repository.AccesoRepository;
+import com.myplans.auth.repository.ModuloRepository;
+import com.myplans.auth.repository.RoleModuloRepository;
 import com.myplans.auth.repository.RoleRepository;
 import com.myplans.auth.repository.UserRepository;
 import org.springframework.stereotype.Service;
@@ -17,13 +23,22 @@ public class UserService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ModuloRepository moduloRepository;
+    private final AccesoRepository accesoRepository;
+    private final RoleModuloRepository roleModuloRepository;
 
     public UserService(UserRepository userRepository, 
                     RoleRepository roleRepository, 
-                    PasswordEncoder passwordEncoder) {
+                    PasswordEncoder passwordEncoder,
+                    ModuloRepository moduloRepository,
+                    AccesoRepository accesoRepository,
+                    RoleModuloRepository roleModuloRepository) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
+        this.moduloRepository = moduloRepository;
+        this.accesoRepository = accesoRepository;
+        this.roleModuloRepository = roleModuloRepository;
     }
 
     public List<User> getAllUsers() {
@@ -78,7 +93,7 @@ public class UserService {
         user.setIsActive(true);
 
         if (dto.getRoles() != null && !dto.getRoles().isEmpty()) {
-            String roleName = dto.getRoles().iterator().next();
+            String roleName = dto.getRoles().iterator().next(); 
             Role role = roleRepository.findByNombre(roleName)
                     .orElseThrow(() -> new RuntimeException("Rol no encontrado: " + roleName));
             user.setRole(role);
@@ -113,5 +128,49 @@ public class UserService {
         
         user.setEmail(newEmail);
         userRepository.save(user);
+    }
+
+    @Transactional
+    public void grantPermissionToRole(Long idRol, Long idModulo, Long idAcceso) {
+        Role role = roleRepository.findById(idRol)
+            .orElseThrow(() -> new RuntimeException("Rol no encontrado"));
+        Modulo modulo = moduloRepository.findById(idModulo)
+            .orElseThrow(() -> new RuntimeException("Módulo no encontrado"));
+        Acceso acceso = accesoRepository.findById(idAcceso)
+            .orElseThrow(() -> new RuntimeException("Acceso no encontrado"));
+
+        RoleModulo.RoleModuloId idCompuesto = new RoleModulo.RoleModuloId();
+        idCompuesto.setIdRol(idRol);
+        idCompuesto.setIdModulo(idModulo);
+        idCompuesto.setIdAcceso(idAcceso);
+
+        if (!roleModuloRepository.existsById(idCompuesto)) {
+            RoleModulo roleModulo = new RoleModulo();
+            roleModulo.setId(idCompuesto);
+            roleModulo.setRol(role);
+            roleModulo.setModulo(modulo);
+            roleModulo.setAcceso(acceso);
+            roleModuloRepository.save(roleModulo);
+        }
+    }
+
+    @Transactional
+    public void revokePermissionFromRole(Long idRol, Long idModulo, Long idAcceso) {
+        RoleModulo.RoleModuloId idCompuesto = new RoleModulo.RoleModuloId();
+        idCompuesto.setIdRol(idRol);
+        idCompuesto.setIdModulo(idModulo);
+        idCompuesto.setIdAcceso(idAcceso);
+
+        if(roleModuloRepository.existsById(idCompuesto)) {
+            roleModuloRepository.deleteById(idCompuesto);
+        }
+    }
+
+    public List<Modulo> getAllModulos() {
+        return moduloRepository.findAll();
+    }
+
+    public List<Acceso> getAllAccesos() {
+        return accesoRepository.findAll();
     }
 }
