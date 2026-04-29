@@ -70,28 +70,43 @@ public class DataSeeder implements CommandLineRunner {
                     return accesoRepository.save(a);
                 });
 
-        Acceso accesoEliminar = accesoRepository.findAll().stream()
-                .filter(a -> a.getNombre().equals("ELIMINAR"))
+        Acceso accesoLeer = accesoRepository.findAll().stream()
+                .filter(a -> a.getNombre().equals("LEER"))
                 .findFirst()
                 .orElseGet(() -> {
                     Acceso a = new Acceso();
-                    a.setNombre("ELIMINAR");
-                    a.setDescripcion("Permite borrar registros");
+                    a.setNombre("LEER");
+                    a.setDescripcion("Permite visualizar información");
                     return accesoRepository.save(a);
                 });
 
         asignarPermiso(adminRole, moduloPlanos, accesoCrear);
+        asignarPermiso(adminRole, moduloPlanos, accesoLeer);
+        asignarPermiso(auditorRole, moduloPlanos, accesoLeer);
 
         if (!userRepository.existsByEmail("admin@myplans.com")) {
-            User admin = new User();
-            admin.setEmail("admin@myplans.com");
-            admin.setNombreCompleto("Administrador Maestro");
-            admin.setPassword(passwordEncoder.encode("PasswordSegura123!")); 
-            admin.setRole(adminRole);
-            
-            userRepository.save(admin);
-            System.out.println("✅ SEMILLA: Administrador maestro creado con éxito (admin@myplans.com)");
+            crearUsuario("admin@myplans.com", "Administrador Maestro", "PasswordSegura123!", adminRole);
         }
+
+        if (!userRepository.existsByEmail("user@myplans.com")) {
+            crearUsuario("user@myplans.com", "Operador de Terreno", "User123!", userRole);
+        }
+
+        if (!userRepository.existsByEmail("auditor@myplans.com")) {
+            crearUsuario("auditor@myplans.com", "Auditor de Proyectos", "Auditor123!", auditorRole);
+        }
+
+        System.out.println("✅ SEMILLA: Datos de prueba cargados correctamente.");
+    }
+
+    private void crearUsuario(String email, String nombre, String password, Role role) {
+        User user = new User();
+        user.setEmail(email);
+        user.setNombreCompleto(nombre);
+        user.setPassword(passwordEncoder.encode(password));
+        user.setRole(role);
+        user.setIsActive(true);
+        userRepository.save(user);
     }
 
     private void asignarPermiso(Role rol, Modulo modulo, Acceso acceso) {
