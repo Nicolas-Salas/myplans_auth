@@ -87,8 +87,10 @@ public class UserService {
         }
 
         User user = new User();
-        user.setEmail(dto.getEmail());
-        user.setNombreCompleto(dto.getEmail());
+        user.setEmail(dto.getEmail().toLowerCase());
+        user.setNombreCompleto(dto.getNombreCompleto());
+        user.setRut(dto.getRut());
+        user.setTelefono(dto.getTelefono());
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
         user.setIsActive(true);
 
@@ -118,15 +120,17 @@ public class UserService {
     }
 
     @Transactional
+    @Transactional
     public void updateUserEmail(Long userId, String newEmail) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
         
-        if (!user.getEmail().equals(newEmail) && userRepository.existsByEmail(newEmail)) {
+        String normalizedEmail = newEmail.toLowerCase();
+        if (!user.getEmail().equals(normalizedEmail) && userRepository.existsByEmail(normalizedEmail)) {
             throw new RuntimeException("El nuevo correo ya está en uso");
         }
         
-        user.setEmail(newEmail);
+        user.setEmail(normalizedEmail);
         userRepository.save(user);
     }
 

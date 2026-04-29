@@ -64,10 +64,12 @@ public class AuthService {
         }
 
         User user = new User();
-        user.setEmail(registerDTO.getEmail());
+        user.setEmail(registerDTO.getEmail().toLowerCase());
         user.setPassword(passwordEncoder.encode(registerDTO.getPassword()));
-        user.setNombreCompleto(registerDTO.getEmail()); 
-        user.setIsActive(true);
+        user.setNombreCompleto(registerDTO.getNombreCompleto()); 
+        user.setRut(registerDTO.getRut());
+        user.setTelefono(registerDTO.getTelefono());
+        user.setIsActive(false); 
 
         Role assignedRole;
         if (registerDTO.getRoles() == null || registerDTO.getRoles().isEmpty()) {
@@ -84,13 +86,14 @@ public class AuthService {
     }
 
     public AuthResponseDTO authenticateUser(LoginRequestDTO loginRequest) {
+        String email = loginRequest.getEmail().toLowerCase();
         authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword()));
+                new UsernamePasswordAuthenticationToken(email, loginRequest.getPassword()));
 
-        User user = userRepository.findByEmail(loginRequest.getEmail())
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
                 
-        UserDetails userDetails = userDetailsService.loadUserByUsername(loginRequest.getEmail());
+        UserDetails userDetails = userDetailsService.loadUserByUsername(email);
         String jwtToken = jwtUtil.generateToken(userDetails);
 
         List<ModulePermissionDTO> permisosFrontend = new ArrayList<>();

@@ -16,6 +16,8 @@ import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -58,13 +60,30 @@ public class AuthController {
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Autenticación exitosa, retorna el token JWT"),
         @ApiResponse(responseCode = "401", description = "Credenciales inválidas (Unauthorized)"),
+        @ApiResponse(responseCode = "403", description = "Cuenta pendiente de activación (Forbidden)"),
         @ApiResponse(responseCode = "400", description = "Cuerpo de la petición mal formado")
     })
     @PostMapping("/login")
-    public ResponseEntity<AuthResponseDTO> authenticateUser(
+    public ResponseEntity<?> authenticateUser(
             @Parameter(description = "Credenciales de acceso") @Valid @RequestBody LoginRequestDTO loginRequest) {
-        AuthResponseDTO authResponse = authService.authenticateUser(loginRequest);
-        return ResponseEntity.ok(authResponse);
+        try {
+            AuthResponseDTO authResponse = authService.authenticateUser(loginRequest);
+            return ResponseEntity.ok(authResponse);
+            
+        } catch (DisabledException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("error", "Cuenta pendiente de activación");
+            response.put("message", "Tu cuenta ha sido registrada con éxito, pero debe ser activada por un administrador para poder ingresar.");
+            response.put("status", 403);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+            
+        } catch (BadCredentialsException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("error", "Credenciales inválidas");
+            response.put("message", "El correo o la contraseña son incorrectos.");
+            response.put("status", 401);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+        }
     }
 
     @Operation(summary = "Solicitar recuperación de contraseña", description = "Genera un token de un solo uso (TTL 15 min) y simula el envío de un correo electrónico con el enlace de recuperación. Por seguridad, siempre retorna un 200 OK para evitar enumeración de usuarios.")

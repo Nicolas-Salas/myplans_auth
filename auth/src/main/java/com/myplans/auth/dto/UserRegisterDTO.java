@@ -19,5 +19,9 @@ public class UserRegisterDTO {
     @Size(min = 8, message = "La contraseña debe tener al menos 8 caracteres")
     private String password;
 
+    private String nombreCompleto;
+    private String rut;
+    private String telefono;
+
     private Set<String> roles;
 }
