@@ -1,5 +1,6 @@
 package com.myplans.auth.controller;
 
+import com.myplans.auth.dto.AdminUpdateDTO;
 import com.myplans.auth.dto.UserRegisterDTO;
 import com.myplans.auth.dto.PermissionRequestDTO;
 import com.myplans.auth.entity.Role;
@@ -37,7 +38,7 @@ public class AdminController {
     }
 
     // --- ENDPOINTS DE USUARIOS ---
-    
+
     @Operation(summary = "Listar todos los usuarios", description = "Retorna una lista completa de todos los operadores, auditores y administradores registrados en el sistema.")
     @GetMapping("/users")
     public ResponseEntity<List<User>> getAllUsers() {
@@ -46,8 +47,8 @@ public class AdminController {
 
     @Operation(summary = "Activar/Desactivar Usuario (Soft Delete)", description = "Alterna el estado 'isActive' de un usuario. Si está activo lo desactiva (baneo temporal/despido) y viceversa.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Estado del usuario actualizado con éxito"),
-        @ApiResponse(responseCode = "404", description = "Usuario no encontrado")
+            @ApiResponse(responseCode = "200", description = "Estado del usuario actualizado con éxito"),
+            @ApiResponse(responseCode = "404", description = "Usuario no encontrado")
     })
     @PatchMapping("/users/{id}/toggle-status")
     public ResponseEntity<Map<String, String>> toggleUserStatus(
@@ -61,7 +62,7 @@ public class AdminController {
     @Operation(summary = "Asignar permiso (Rol) a usuario", description = "Añade un nuevo rol a la lista de privilegios del usuario especificado.")
     @PostMapping("/users/{userId}/roles/{roleName}")
     public ResponseEntity<Map<String, String>> assignRole(
-            @Parameter(description = "ID del usuario") @PathVariable Long userId, 
+            @Parameter(description = "ID del usuario") @PathVariable Long userId,
             @Parameter(description = "Nombre del rol (ej. ROLE_AUDITOR)") @PathVariable String roleName) {
         userService.assignRoleToUser(userId, roleName);
         Map<String, String> response = new HashMap<>();
@@ -103,21 +104,34 @@ public class AdminController {
         return ResponseEntity.status(HttpStatus.CREATED).body(userService.adminCreateUser(dto));
     }
 
-    @Operation(summary = "Editar correo de usuario", description = "Actualiza la dirección de correo electrónico de un operador existente. Valida que el nuevo correo no esté en uso.")
+    @Operation(summary = "Editar datos de usuario", description = "Actualiza los campos editables de un usuario: email, nombreCompleto, rut, telefono y/o password. "
+            +
+            "Todos los campos son opcionales — solo se actualizan los que vengan con valor.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Usuario actualizado correctamente"),
+            @ApiResponse(responseCode = "400", description = "Datos inválidos (ej: correo o RUT ya en uso)"),
+            @ApiResponse(responseCode = "404", description = "Usuario no encontrado")
+    })
     @PutMapping("/users/{id}")
-    public ResponseEntity<Map<String, String>> updateEmail(
-            @Parameter(description = "ID del usuario a modificar") @PathVariable Long id, 
-            @Parameter(description = "Nuevo correo electrónico") @RequestParam String email) {
-        userService.updateUserEmail(id, email);
-        Map<String, String> response = new HashMap<>();
-        response.put("message", "Usuario actualizado correctamente");
-        return ResponseEntity.ok(response);
+    public ResponseEntity<Map<String, String>> updateUser(
+            @Parameter(description = "ID del usuario a modificar") @PathVariable Long id,
+            @RequestBody AdminUpdateDTO dto) {
+        try {
+            userService.updateUser(id, dto);
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Usuario actualizado correctamente");
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
     }
 
     @Operation(summary = "Revocar permiso (Degradar Rol)", description = "Quita un rol específico a un usuario, aplicando el principio de mínimo privilegio.")
     @DeleteMapping("/users/{userId}/roles/{roleName}")
     public ResponseEntity<Map<String, String>> revokeRole(
-            @Parameter(description = "ID del usuario") @PathVariable Long userId, 
+            @Parameter(description = "ID del usuario") @PathVariable Long userId,
             @Parameter(description = "Rol a remover (ej. ROLE_ADMIN)") @PathVariable String roleName) {
         userService.revokeRoleFromUser(userId, roleName);
         Map<String, String> response = new HashMap<>();
@@ -125,7 +139,7 @@ public class AdminController {
         return ResponseEntity.ok(response);
     }
 
-    // --- ENDPOINTS MATRIZ DE PERMISOS  ---
+    // --- ENDPOINTS MATRIZ DE PERMISOS ---
 
     @Operation(summary = "Listar todos los módulos", description = "Obtiene el catálogo de módulos (ej: Planos, Usuarios) para renderizar las filas de la matriz de permisos.")
     @GetMapping("/modules")
@@ -142,7 +156,7 @@ public class AdminController {
     @Operation(summary = "Otorgar Permiso a Rol", description = "Asocia un nivel de acceso específico dentro de un módulo a un rol (Inserta en ROL_MODULO).")
     @PostMapping("/roles/{idRol}/permissions")
     public ResponseEntity<Map<String, String>> grantPermission(
-            @Parameter(description = "ID del Rol al que se le dará el permiso") @PathVariable Long idRol, 
+            @Parameter(description = "ID del Rol al que se le dará el permiso") @PathVariable Long idRol,
             @RequestBody PermissionRequestDTO dto) {
         userService.grantPermissionToRole(idRol, dto.getIdModulo(), dto.getIdAcceso());
         Map<String, String> response = new HashMap<>();
@@ -153,7 +167,7 @@ public class AdminController {
     @Operation(summary = "Revocar Permiso a Rol", description = "Quita un nivel de acceso específico dentro de un módulo a un rol (Elimina de ROL_MODULO).")
     @DeleteMapping("/roles/{idRol}/permissions")
     public ResponseEntity<Map<String, String>> revokePermission(
-            @Parameter(description = "ID del Rol al que se le quitará el permiso") @PathVariable Long idRol, 
+            @Parameter(description = "ID del Rol al que se le quitará el permiso") @PathVariable Long idRol,
             @RequestBody PermissionRequestDTO dto) {
         userService.revokePermissionFromRole(idRol, dto.getIdModulo(), dto.getIdAcceso());
         Map<String, String> response = new HashMap<>();

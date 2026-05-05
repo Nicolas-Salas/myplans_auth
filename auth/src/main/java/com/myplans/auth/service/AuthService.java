@@ -1,6 +1,8 @@
 package com.myplans.auth.service;
 
+import com.myplans.auth.dto.AdminUpdateDTO;
 import com.myplans.auth.dto.AuthResponseDTO;
+import com.myplans.auth.dto.ChangePasswordDTO;
 import com.myplans.auth.dto.LoginRequestDTO;
 import com.myplans.auth.dto.ModulePermissionDTO;
 import com.myplans.auth.dto.UserRegisterDTO;
@@ -60,16 +62,22 @@ public class AuthService {
     @Transactional
     public void registerUser(UserRegisterDTO registerDTO) {
         if (userRepository.existsByEmail(registerDTO.getEmail())) {
-            throw new RuntimeException("El email ya está registrado");
+            throw new RuntimeException("El correo ingresado ya se encuentra registrado");
+        }
+
+        if (registerDTO.getRut() != null && !registerDTO.getRut().isBlank()) {
+            if (userRepository.existsByRut(registerDTO.getRut())) {
+                throw new RuntimeException("El RUT ingresado ya se encuentra registrado");
+            }
         }
 
         User user = new User();
         user.setEmail(registerDTO.getEmail().toLowerCase());
         user.setPassword(passwordEncoder.encode(registerDTO.getPassword()));
-        user.setNombreCompleto(registerDTO.getNombreCompleto()); 
+        user.setNombreCompleto(registerDTO.getNombreCompleto());
         user.setRut(registerDTO.getRut());
         user.setTelefono(registerDTO.getTelefono());
-        user.setIsActive(false); 
+        user.setIsActive(false);
 
         Role assignedRole;
         if (registerDTO.getRoles() == null || registerDTO.getRoles().isEmpty()) {
@@ -80,7 +88,7 @@ public class AuthService {
             assignedRole = roleRepository.findByNombre(roleName)
                     .orElseThrow(() -> new RuntimeException("Error: Role " + roleName + " no encontrado."));
         }
-        
+
         user.setRole(assignedRole);
         userRepository.save(user);
     }
@@ -92,12 +100,12 @@ public class AuthService {
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-                
+
         UserDetails userDetails = userDetailsService.loadUserByUsername(email);
         String jwtToken = jwtUtil.generateToken(userDetails);
 
         List<ModulePermissionDTO> permisosFrontend = new ArrayList<>();
-        
+
         if (user.getRole() != null && user.getRole().getPermisos() != null) {
             Map<Modulo, List<RoleModulo>> agrupadosPorModulo = user.getRole().getPermisos().stream()
                     .collect(Collectors.groupingBy(RoleModulo::getModulo));
@@ -110,19 +118,17 @@ public class AuthService {
                 permisosFrontend.add(new ModulePermissionDTO(
                         modulo.getNombre(),
                         modulo.getRutaFrontend(),
-                        acciones
-                ));
+                        acciones));
             });
         }
 
         return new AuthResponseDTO(
-                jwtToken, 
-                "Bearer", 
-                user.getEmail(), 
-                user.getNombreCompleto(), 
+                jwtToken,
+                "Bearer",
+                user.getEmail(),
+                user.getNombreCompleto(),
                 user.getRole() != null ? user.getRole().getNombre() : "SIN_ROL",
-                permisosFrontend
-        );
+                permisosFrontend);
     }
 
     @Transactional
@@ -151,5 +157,43 @@ public class AuthService {
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
         tokenRepository.delete(resetToken);
+    }
+
+    public User getMe(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+    }
+
+    @Transactional
+    public void updateMe(String email, AdminUpdateDTO dto) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        if (dto.getNombreCompleto() != null && !dto.getNombreCompleto().isBlank()) {
+            user.setNombreCompleto(dto.getNombreCompleto());
+        }
+
+        if (dto.getTelefono() != null) {
+            user.setTelefono(dto.getTelefono());
+        }
+
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void changeMyPassword(String email, ChangePasswordDTO dto) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        if (!passwordEncoder.matches(dto.getCurrentPassword(), user.getPassword())) {
+            throw new RuntimeException("La contraseña actual es incorrecta");
+        }
+
+        if (dto.getNewPassword() == null || dto.getNewPassword().length() < 8) {
+            throw new RuntimeException("La nueva contraseña debe tener al menos 8 caracteres");
+        }
+
+        user.setPassword(passwordEncoder.encode(dto.getNewPassword()));
+        userRepository.save(user);
     }
 }

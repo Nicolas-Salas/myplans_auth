@@ -1,5 +1,6 @@
 package com.myplans.auth.service;
 
+import com.myplans.auth.dto.AdminUpdateDTO;
 import com.myplans.auth.dto.UserRegisterDTO;
 import com.myplans.auth.entity.Acceso;
 import com.myplans.auth.entity.Modulo;
@@ -27,12 +28,12 @@ public class UserService {
     private final AccesoRepository accesoRepository;
     private final RoleModuloRepository roleModuloRepository;
 
-    public UserService(UserRepository userRepository, 
-                    RoleRepository roleRepository, 
-                    PasswordEncoder passwordEncoder,
-                    ModuloRepository moduloRepository,
-                    AccesoRepository accesoRepository,
-                    RoleModuloRepository roleModuloRepository) {
+    public UserService(UserRepository userRepository,
+            RoleRepository roleRepository,
+            PasswordEncoder passwordEncoder,
+            ModuloRepository moduloRepository,
+            AccesoRepository accesoRepository,
+            RoleModuloRepository roleModuloRepository) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
@@ -75,7 +76,6 @@ public class UserService {
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
         Role role = roleRepository.findByNombre(roleName)
                 .orElseThrow(() -> new RuntimeException("Rol no encontrado"));
-
         user.setRole(role);
         userRepository.save(user);
     }
@@ -83,7 +83,13 @@ public class UserService {
     @Transactional
     public User adminCreateUser(UserRegisterDTO dto) {
         if (userRepository.existsByEmail(dto.getEmail())) {
-            throw new RuntimeException("El correo ya está registrado");
+            throw new RuntimeException("El correo ingresado ya se encuentra registrado");
+        }
+
+        if (dto.getRut() != null && !dto.getRut().isBlank()) {
+            if (userRepository.existsByRut(dto.getRut())) {
+                throw new RuntimeException("El RUT ingresado ya se encuentra registrado");
+            }
         }
 
         User user = new User();
@@ -95,7 +101,7 @@ public class UserService {
         user.setIsActive(true);
 
         if (dto.getRoles() != null && !dto.getRoles().isEmpty()) {
-            String roleName = dto.getRoles().iterator().next(); 
+            String roleName = dto.getRoles().iterator().next();
             Role role = roleRepository.findByNombre(roleName)
                     .orElseThrow(() -> new RuntimeException("Rol no encontrado: " + roleName));
             user.setRole(role);
@@ -114,34 +120,70 @@ public class UserService {
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
         Role userRole = roleRepository.findByNombre("ROLE_USER")
                 .orElseThrow(() -> new RuntimeException("Error: Rol base no encontrado"));
-        
         user.setRole(userRole);
         userRepository.save(user);
     }
 
     @Transactional
-    @Transactional
     public void updateUserEmail(Long userId, String newEmail) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-        
         String normalizedEmail = newEmail.toLowerCase();
         if (!user.getEmail().equals(normalizedEmail) && userRepository.existsByEmail(normalizedEmail)) {
             throw new RuntimeException("El nuevo correo ya está en uso");
         }
-        
         user.setEmail(normalizedEmail);
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void updateUser(Long userId, AdminUpdateDTO dto) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        if (dto.getEmail() != null && !dto.getEmail().isBlank()) {
+            String normalizedEmail = dto.getEmail().toLowerCase();
+            if (!user.getEmail().equals(normalizedEmail) && userRepository.existsByEmail(normalizedEmail)) {
+                throw new RuntimeException("El nuevo correo ya está en uso");
+            }
+            user.setEmail(normalizedEmail);
+        }
+
+        if (dto.getNombreCompleto() != null && !dto.getNombreCompleto().isBlank()) {
+            user.setNombreCompleto(dto.getNombreCompleto());
+        }
+
+        if (dto.getRut() != null && !dto.getRut().isBlank()) {
+            boolean rutEnUso = userRepository.findAll().stream()
+                    .anyMatch(u -> !u.getId().equals(userId) && dto.getRut().equals(u.getRut()));
+            if (rutEnUso) {
+                throw new RuntimeException("El RUT ya está registrado");
+            }
+            user.setRut(dto.getRut());
+        }
+
+        if (dto.getTelefono() != null) {
+            user.setTelefono(dto.getTelefono());
+        }
+
+        if (dto.getPassword() != null && !dto.getPassword().isBlank()) {
+            if (dto.getPassword().length() < 8) {
+                throw new RuntimeException("La contraseña debe tener al menos 8 caracteres");
+            }
+            user.setPassword(passwordEncoder.encode(dto.getPassword()));
+        }
+
         userRepository.save(user);
     }
 
     @Transactional
     public void grantPermissionToRole(Long idRol, Long idModulo, Long idAcceso) {
         Role role = roleRepository.findById(idRol)
-            .orElseThrow(() -> new RuntimeException("Rol no encontrado"));
+                .orElseThrow(() -> new RuntimeException("Rol no encontrado"));
         Modulo modulo = moduloRepository.findById(idModulo)
-            .orElseThrow(() -> new RuntimeException("Módulo no encontrado"));
+                .orElseThrow(() -> new RuntimeException("Módulo no encontrado"));
         Acceso acceso = accesoRepository.findById(idAcceso)
-            .orElseThrow(() -> new RuntimeException("Acceso no encontrado"));
+                .orElseThrow(() -> new RuntimeException("Acceso no encontrado"));
 
         RoleModulo.RoleModuloId idCompuesto = new RoleModulo.RoleModuloId();
         idCompuesto.setIdRol(idRol);
@@ -165,7 +207,7 @@ public class UserService {
         idCompuesto.setIdModulo(idModulo);
         idCompuesto.setIdAcceso(idAcceso);
 
-        if(roleModuloRepository.existsById(idCompuesto)) {
+        if (roleModuloRepository.existsById(idCompuesto)) {
             roleModuloRepository.deleteById(idCompuesto);
         }
     }
