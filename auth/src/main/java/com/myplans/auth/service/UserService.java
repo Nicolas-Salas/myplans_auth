@@ -7,6 +7,11 @@ import com.myplans.auth.entity.Modulo;
 import com.myplans.auth.entity.Role;
 import com.myplans.auth.entity.RoleModulo;
 import com.myplans.auth.entity.User;
+import com.myplans.auth.exception.BusinessException;
+import com.myplans.auth.exception.EmailAlreadyExistsException;
+import com.myplans.auth.exception.NoFieldsToUpdateException;
+import com.myplans.auth.exception.ResourceNotFoundException;
+import com.myplans.auth.exception.RutAlreadyExistsException;
 import com.myplans.auth.repository.AccesoRepository;
 import com.myplans.auth.repository.ModuloRepository;
 import com.myplans.auth.repository.RoleModuloRepository;
@@ -49,7 +54,7 @@ public class UserService {
     @Transactional
     public void toggleUserStatus(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
         user.setIsActive(!user.getIsActive());
         userRepository.save(user);
     }
@@ -60,12 +65,15 @@ public class UserService {
 
     @Transactional
     public void createRole(String roleName) {
+        if (roleName == null || roleName.isBlank()) {
+            throw new BusinessException("Debes ingresar el nombre del rol");
+        }
         String formattedRoleName = roleName.toUpperCase();
         if (!formattedRoleName.startsWith("ROLE_")) {
             formattedRoleName = "ROLE_" + formattedRoleName;
         }
         if (roleRepository.findByNombre(formattedRoleName).isPresent()) {
-            throw new RuntimeException("El rol ya existe");
+            throw new BusinessException("El rol '" + formattedRoleName + "' ya existe");
         }
         roleRepository.save(new Role(null, formattedRoleName));
     }
@@ -73,24 +81,28 @@ public class UserService {
     @Transactional
     public void assignRoleToUser(Long userId, String roleName) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
         Role role = roleRepository.findByNombre(roleName)
-                .orElseThrow(() -> new RuntimeException("Rol no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Rol no encontrado: " + roleName));
         user.setRole(role);
         userRepository.save(user);
     }
 
     @Transactional
     public User adminCreateUser(UserRegisterDTO dto) {
-        if (userRepository.existsByEmail(dto.getEmail())) {
-            throw new RuntimeException("El correo ingresado ya se encuentra registrado");
+        if (userRepository.existsByEmail(dto.getEmail().toLowerCase())) {
+            throw new EmailAlreadyExistsException(
+                    "El correo ingresado ya se encuentra registrado");
         }
 
         if (dto.getRut() != null && !dto.getRut().isBlank()) {
             if (userRepository.existsByRut(dto.getRut())) {
-                throw new RuntimeException("El RUT ingresado ya se encuentra registrado");
+                throw new RutAlreadyExistsException(
+                        "El RUT ingresado ya se encuentra registrado");
             }
         }
+
+        PasswordPolicy.validate(dto.getPassword());
 
         User user = new User();
         user.setEmail(dto.getEmail().toLowerCase());
@@ -103,11 +115,12 @@ public class UserService {
         if (dto.getRoles() != null && !dto.getRoles().isEmpty()) {
             String roleName = dto.getRoles().iterator().next();
             Role role = roleRepository.findByNombre(roleName)
-                    .orElseThrow(() -> new RuntimeException("Rol no encontrado: " + roleName));
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Rol no encontrado: " + roleName));
             user.setRole(role);
         } else {
             Role userRole = roleRepository.findByNombre("ROLE_USER")
-                    .orElseThrow(() -> new RuntimeException("Error: Rol base no encontrado"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Rol base no encontrado"));
             user.setRole(userRole);
         }
 
@@ -117,20 +130,23 @@ public class UserService {
     @Transactional
     public void revokeRoleFromUser(Long userId, String roleName) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
         Role userRole = roleRepository.findByNombre("ROLE_USER")
-                .orElseThrow(() -> new RuntimeException("Error: Rol base no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Rol base no encontrado"));
         user.setRole(userRole);
         userRepository.save(user);
     }
 
     @Transactional
     public void updateUserEmail(Long userId, String newEmail) {
+        if (newEmail == null || newEmail.isBlank()) {
+            throw new NoFieldsToUpdateException("Debes enviar el nuevo correo");
+        }
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
         String normalizedEmail = newEmail.toLowerCase();
         if (!user.getEmail().equals(normalizedEmail) && userRepository.existsByEmail(normalizedEmail)) {
-            throw new RuntimeException("El nuevo correo ya está en uso");
+            throw new EmailAlreadyExistsException("El nuevo correo ya está en uso");
         }
         user.setEmail(normalizedEmail);
         userRepository.save(user);
@@ -138,13 +154,19 @@ public class UserService {
 
     @Transactional
     public void updateUser(Long userId, AdminUpdateDTO dto) {
+        if (dto == null || dto.isEmpty()) {
+            throw new NoFieldsToUpdateException(
+                    "Debes enviar al menos un campo para actualizar: " +
+                    "email, nombreCompleto, rut, telefono o password");
+        }
+
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         if (dto.getEmail() != null && !dto.getEmail().isBlank()) {
             String normalizedEmail = dto.getEmail().toLowerCase();
             if (!user.getEmail().equals(normalizedEmail) && userRepository.existsByEmail(normalizedEmail)) {
-                throw new RuntimeException("El nuevo correo ya está en uso");
+                throw new EmailAlreadyExistsException("El nuevo correo ya está en uso");
             }
             user.setEmail(normalizedEmail);
         }
@@ -157,7 +179,7 @@ public class UserService {
             boolean rutEnUso = userRepository.findAll().stream()
                     .anyMatch(u -> !u.getId().equals(userId) && dto.getRut().equals(u.getRut()));
             if (rutEnUso) {
-                throw new RuntimeException("El RUT ya está registrado");
+                throw new RutAlreadyExistsException("El RUT ya está registrado");
             }
             user.setRut(dto.getRut());
         }
@@ -167,9 +189,8 @@ public class UserService {
         }
 
         if (dto.getPassword() != null && !dto.getPassword().isBlank()) {
-            if (dto.getPassword().length() < 8) {
-                throw new RuntimeException("La contraseña debe tener al menos 8 caracteres");
-            }
+            // Si el admin envía nueva contraseña, debe cumplir la política.
+            PasswordPolicy.validate(dto.getPassword());
             user.setPassword(passwordEncoder.encode(dto.getPassword()));
         }
 
@@ -179,11 +200,11 @@ public class UserService {
     @Transactional
     public void grantPermissionToRole(Long idRol, Long idModulo, Long idAcceso) {
         Role role = roleRepository.findById(idRol)
-                .orElseThrow(() -> new RuntimeException("Rol no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Rol no encontrado"));
         Modulo modulo = moduloRepository.findById(idModulo)
-                .orElseThrow(() -> new RuntimeException("Módulo no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Módulo no encontrado"));
         Acceso acceso = accesoRepository.findById(idAcceso)
-                .orElseThrow(() -> new RuntimeException("Acceso no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Acceso no encontrado"));
 
         RoleModulo.RoleModuloId idCompuesto = new RoleModulo.RoleModuloId();
         idCompuesto.setIdRol(idRol);

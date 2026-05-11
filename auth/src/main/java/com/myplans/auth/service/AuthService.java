@@ -11,6 +11,12 @@ import com.myplans.auth.entity.Role;
 import com.myplans.auth.entity.RoleModulo;
 import com.myplans.auth.entity.User;
 import com.myplans.auth.entity.PasswordResetToken;
+import com.myplans.auth.exception.BusinessException;
+import com.myplans.auth.exception.EmailAlreadyExistsException;
+import com.myplans.auth.exception.InvalidPasswordException;
+import com.myplans.auth.exception.NoFieldsToUpdateException;
+import com.myplans.auth.exception.ResourceNotFoundException;
+import com.myplans.auth.exception.RutAlreadyExistsException;
 import com.myplans.auth.repository.PasswordResetTokenRepository;
 import com.myplans.auth.repository.RoleRepository;
 import com.myplans.auth.repository.UserRepository;
@@ -61,15 +67,18 @@ public class AuthService {
 
     @Transactional
     public void registerUser(UserRegisterDTO registerDTO) {
-        if (userRepository.existsByEmail(registerDTO.getEmail())) {
-            throw new RuntimeException("El correo ingresado ya se encuentra registrado");
+        if (userRepository.existsByEmail(registerDTO.getEmail().toLowerCase())) {
+            throw new EmailAlreadyExistsException(
+                    "El correo ingresado ya se encuentra registrado");
         }
 
         if (registerDTO.getRut() != null && !registerDTO.getRut().isBlank()) {
             if (userRepository.existsByRut(registerDTO.getRut())) {
-                throw new RuntimeException("El RUT ingresado ya se encuentra registrado");
+                throw new RutAlreadyExistsException(
+                        "El RUT ingresado ya se encuentra registrado");
             }
         }
+        PasswordPolicy.validate(registerDTO.getPassword());
 
         User user = new User();
         user.setEmail(registerDTO.getEmail().toLowerCase());
@@ -82,11 +91,12 @@ public class AuthService {
         Role assignedRole;
         if (registerDTO.getRoles() == null || registerDTO.getRoles().isEmpty()) {
             assignedRole = roleRepository.findByNombre("ROLE_USER")
-                    .orElseThrow(() -> new RuntimeException("Error: Rol base no encontrado."));
+                    .orElseThrow(() -> new ResourceNotFoundException("Rol base no encontrado"));
         } else {
             String roleName = registerDTO.getRoles().iterator().next();
             assignedRole = roleRepository.findByNombre(roleName)
-                    .orElseThrow(() -> new RuntimeException("Error: Role " + roleName + " no encontrado."));
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Rol no encontrado: " + roleName));
         }
 
         user.setRole(assignedRole);
@@ -99,7 +109,7 @@ public class AuthService {
                 new UsernamePasswordAuthenticationToken(email, loginRequest.getPassword()));
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(email);
         String jwtToken = jwtUtil.generateToken(userDetails);
@@ -134,7 +144,7 @@ public class AuthService {
     @Transactional
     public void requestPasswordReset(String email) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         tokenRepository.deleteByUser_Id(user.getId());
         String token = UUID.randomUUID().toString();
@@ -146,12 +156,14 @@ public class AuthService {
     @Transactional
     public void resetPassword(String token, String newPassword) {
         PasswordResetToken resetToken = tokenRepository.findByToken(token)
-                .orElseThrow(() -> new RuntimeException("Token inválido o no encontrado"));
+                .orElseThrow(() -> new BusinessException("Token inválido o no encontrado"));
 
         if (resetToken.isExpired()) {
             tokenRepository.delete(resetToken);
-            throw new RuntimeException("El token ha expirado");
+            throw new BusinessException("El token ha expirado. Solicita uno nuevo");
         }
+
+        PasswordPolicy.validate(newPassword);
 
         User user = resetToken.getUser();
         user.setPassword(passwordEncoder.encode(newPassword));
@@ -161,13 +173,18 @@ public class AuthService {
 
     public User getMe(String email) {
         return userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
     }
 
     @Transactional
     public void updateMe(String email, AdminUpdateDTO dto) {
+        if (dto == null || dto.isEmpty()) {
+            throw new NoFieldsToUpdateException(
+                    "Debes enviar al menos un campo para actualizar: nombreCompleto o telefono");
+        }
+
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         if (dto.getNombreCompleto() != null && !dto.getNombreCompleto().isBlank()) {
             user.setNombreCompleto(dto.getNombreCompleto());
@@ -183,15 +200,24 @@ public class AuthService {
     @Transactional
     public void changeMyPassword(String email, ChangePasswordDTO dto) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+
+        if (dto.getCurrentPassword() == null || dto.getCurrentPassword().isBlank()) {
+            throw new InvalidPasswordException("Debes ingresar tu contraseña actual");
+        }
+        if (dto.getNewPassword() == null || dto.getNewPassword().isBlank()) {
+            throw new InvalidPasswordException("Debes ingresar la nueva contraseña");
+        }
 
         if (!passwordEncoder.matches(dto.getCurrentPassword(), user.getPassword())) {
-            throw new RuntimeException("La contraseña actual es incorrecta");
+            throw new InvalidPasswordException("La contraseña actual es incorrecta");
         }
 
-        if (dto.getNewPassword() == null || dto.getNewPassword().length() < 8) {
-            throw new RuntimeException("La nueva contraseña debe tener al menos 8 caracteres");
+        if (passwordEncoder.matches(dto.getNewPassword(), user.getPassword())) {
+            throw new InvalidPasswordException(
+                    "La nueva contraseña no puede ser igual a la actual");
         }
+        PasswordPolicy.validate(dto.getNewPassword());
 
         user.setPassword(passwordEncoder.encode(dto.getNewPassword()));
         userRepository.save(user);

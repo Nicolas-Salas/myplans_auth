@@ -19,7 +19,12 @@ public class UserRegisterDTO {
     @Size(min = 8, message = "La contraseña debe tener al menos 8 caracteres")
     private String password;
 
+    // nombre_completo es NOT NULL en la entidad User: si no lo validamos
+    // aquí, la petición llega hasta Hibernate y truena con un 500 por
+    // DataIntegrityViolationException. Mejor responder 400 desde @Valid.
+    @NotBlank(message = "El nombre completo es obligatorio")
     private String nombreCompleto;
+
     private String rut;
     private String telefono;
 

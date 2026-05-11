@@ -13,6 +13,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("dev")
@@ -49,6 +50,7 @@ public class AdminControllerIntegrationTest {
                 {
                   "email": "nuevo.auditor.mina@myplans.com",
                   "password": "PasswordFuerte123!",
+                  "nombreCompleto": "Auditor de Mina",
                   "roles": ["ROLE_AUDITOR"]
                 }
                 """;
@@ -66,19 +68,72 @@ public class AdminControllerIntegrationTest {
     }
 
     @Test
-    public void givenAdminToken_whenUpdateUserEmail_thenReturn200OK() {
+    public void givenAdminToken_whenUpdateUserWithBody_thenReturn200OK() {
+        String updateJson = """
+                {
+                  "email": "admin.actualizado@myplans.com"
+                }
+                """;
+
         HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(adminToken);
 
-        HttpEntity<Void> request = new HttpEntity<>(headers);
+        HttpEntity<String> request = new HttpEntity<>(updateJson, headers);
 
         ResponseEntity<Map> response = restTemplate.exchange(
-                "/api/admin/users/1?email=admin.actualizado@myplans.com",
+                "/api/admin/users/1",
                 HttpMethod.PUT,
                 request,
                 Map.class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals("Usuario actualizado correctamente", response.getBody().get("message"));
+    }
+
+    @Test
+    public void givenAdminToken_whenUpdateUserWithEmptyBody_thenReturn400WithMessage() {
+        String emptyJson = "{}";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(adminToken);
+
+        HttpEntity<String> request = new HttpEntity<>(emptyJson, headers);
+
+        ResponseEntity<Map> response = restTemplate.exchange(
+                "/api/admin/users/1",
+                HttpMethod.PUT,
+                request,
+                Map.class);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        String message = (String) response.getBody().get("message");
+        assertNotNull(message);
+        assertTrue(message.toLowerCase().contains("campo"),
+                "El mensaje debe indicar qué campos se pueden enviar, pero fue: " + message);
+    }
+
+    @Test
+    public void givenAdminToken_whenCreateUserWithDuplicateEmail_thenReturn409() {
+        String duplicateJson = """
+                {
+                  "email": "admin@myplans.com",
+                  "password": "PasswordFuerte123!",
+                  "nombreCompleto": "Otro Admin",
+                  "roles": ["ROLE_AUDITOR"]
+                }
+                """;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(adminToken);
+
+        HttpEntity<String> request = new HttpEntity<>(duplicateJson, headers);
+
+        ResponseEntity<Map> response = restTemplate.postForEntity("/api/admin/users", request, Map.class);
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertNotNull(response.getBody().get("message"));
     }
 }

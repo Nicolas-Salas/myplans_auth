@@ -1,5 +1,9 @@
 package com.myplans.auth.security;
 
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.UnsupportedJwtException;
+import io.jsonwebtoken.security.SignatureException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -33,18 +37,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
 
         final String authHeader = request.getHeader("Authorization");
-        final String jwt;
-        final String userEmail;
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        jwt = authHeader.substring(7);
-        
+        final String jwt = authHeader.substring(7);
+
         try {
-            userEmail = jwtUtil.extractUsername(jwt);
+            String userEmail = jwtUtil.extractUsername(jwt);
             if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
 
@@ -56,10 +58,23 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     );
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
+                } else if (!userDetails.isEnabled()) {
+                    request.setAttribute("jwt_error_message",
+                            "Tu cuenta está deshabilitada. Contacta a un administrador");
                 }
             }
-        } catch (Exception e) {
-            logger.error("Error validando el token JWT: " + e.getMessage());
+        } catch (ExpiredJwtException ex) {
+            request.setAttribute("jwt_error_message",
+                    "Tu sesión ha expirado. Por favor inicia sesión nuevamente");
+            logger.warn("JWT expirado: " + ex.getMessage());
+        } catch (SignatureException | MalformedJwtException | UnsupportedJwtException ex) {
+            request.setAttribute("jwt_error_message",
+                    "Token inválido. Por favor inicia sesión nuevamente");
+            logger.warn("JWT inválido: " + ex.getMessage());
+        } catch (Exception ex) {
+            request.setAttribute("jwt_error_message",
+                    "No se pudo validar tu sesión. Por favor inicia sesión nuevamente");
+            logger.error("Error inesperado validando JWT: " + ex.getMessage());
         }
 
         filterChain.doFilter(request, response);
