@@ -1,5 +1,7 @@
 package com.myplans.auth.security;
 
+import com.myplans.auth.entity.User;
+import com.myplans.auth.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -10,6 +12,9 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 @Component
@@ -21,8 +26,23 @@ public class JwtUtil {
     @Value("${jwt.expiration}")
     private long jwtExpiration;
 
+    private final UserRepository userRepository;
+
+    public JwtUtil(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
     public String generateToken(UserDetails userDetails) {
+        Map<String, Object> claims = new HashMap<>();
+
+        userRepository.findByEmail(userDetails.getUsername()).ifPresent(user -> {
+            claims.put("id_usuario", user.getId());
+            String roleName = (user.getRole() != null) ? user.getRole().getNombre() : "ROLE_USER";
+            claims.put("roles", List.of(roleName));
+        });
+
         return Jwts.builder()
+                .claims(claims)
                 .subject(userDetails.getUsername())
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + jwtExpiration))
