@@ -1,6 +1,10 @@
 spring:
   profiles:
     active: dev
+
+auth:
+  internal:
+    token: ${AUTH_INTERNAL_TOKEN:dev-internal-token-please-change-in-prod}
 springdoc:
   api-docs:
     path: /api-docs

@@ -45,6 +45,17 @@ public class AdminController {
         return ResponseEntity.ok(userService.getAllUsers());
     }
 
+    @Operation(summary = "Mapa id→nombre de todos los usuarios activos", description = "Accesible a AUDITOR y ADMIN para resolver IDs en vistas de auditoría.")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
+    @GetMapping("/users/nombres")
+    public ResponseEntity<List<Map<String, Object>>> getUserNombres() {
+        return ResponseEntity.ok(
+            userService.getAllUsers().stream()
+                .map(u -> Map.<String, Object>of("id", u.getId(), "nombre", u.getNombreCompleto()))
+                .toList()
+        );
+    }
+
     @Operation(summary = "Activar/Desactivar Usuario (Soft Delete)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Estado del usuario actualizado con éxito"),
