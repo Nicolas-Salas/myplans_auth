@@ -216,16 +216,3 @@ para:
 **Importante**: ambos servicios deben compartir el mismo `jwt.secret`
 en sus `application.yml` o, mejor, vía variable de entorno
 `JWT_SECRET`. La firma usa HS384 (`Decoders.BASE64.decode(secret)`).
-
-## Próximos pasos sugeridos
-
-1. **Refresh tokens**: actualmente el JWT expira a las 24 horas sin
-   posibilidad de refrescar. Agregar refresh tokens permitiría
-   sesiones más largas sin sacrificar seguridad.
-2. **Email real para reset**: actualmente `EmailService` registra el
-   correo en logs. Integrar con SMTP o un servicio como SES.
-3. **Tests con MySQL real**: los tests usan el profile `dev` apuntando
-   a MySQL. Para CI/CD conviene agregar Testcontainers o un profile
-   `h2test` como hicimos en el Core.
-4. **Eventos para auditoría**: cuando exista el microservicio Audit,
-   publicar eventos en login, cambio de contraseña, cambio de rol, etc.
