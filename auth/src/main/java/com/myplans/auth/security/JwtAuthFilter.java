@@ -21,8 +21,13 @@ import java.io.IOException;
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
+    private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
+
     private final JwtUtil jwtUtil;
     private final CustomUserDetailsService userDetailsService;
+
+    @org.springframework.beans.factory.annotation.Value("${auth.internal.token:}")
+    private String internalToken;
 
     public JwtAuthFilter(JwtUtil jwtUtil, CustomUserDetailsService userDetailsService) {
         this.jwtUtil = jwtUtil;
@@ -35,6 +40,20 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
+
+        String internalHeader = request.getHeader(INTERNAL_TOKEN_HEADER);
+        if (internalHeader != null && !internalHeader.isBlank()
+                && internalToken != null && !internalToken.isBlank()
+                && internalToken.equals(internalHeader)) {
+            org.springframework.security.core.authority.SimpleGrantedAuthority adminAuth =
+                    new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN");
+            UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                    "reports-service@internal", null, java.util.List.of(adminAuth));
+            authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+            SecurityContextHolder.getContext().setAuthentication(authToken);
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         final String authHeader = request.getHeader("Authorization");
 

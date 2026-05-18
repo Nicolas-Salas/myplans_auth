@@ -56,6 +56,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/logout").permitAll()
                         .requestMatchers("/api/auth/me", "/api/auth/me/**").authenticated()
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/admin/users/nombres").hasAnyRole("ADMIN", "AUDITOR")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
