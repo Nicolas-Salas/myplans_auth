@@ -1,0 +1,7 @@
+package com.myplans.auth.exception;
+
+public class EmailAlreadyExistsException extends RuntimeException {
+    public EmailAlreadyExistsException(String message) {
+        super(message);
+    }
+}
