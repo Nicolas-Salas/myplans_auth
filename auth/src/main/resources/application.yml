@@ -1,6 +1,27 @@
 spring:
   profiles:
     active: dev
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+app:
+  # URL base del frontend; se usa para construir el enlace de recuperación.
+  # dev/test: http://localhost:5173 (o :3000 en docker-compose.test). prod: URL del sitio S3.
+  frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
+  mail:
+    # Mientras esté en false, el correo se "simula" en el log (no requiere credenciales).
+    # Poner en true + configurar MAIL_USERNAME/MAIL_PASSWORD para enviar de verdad.
+    enabled: ${MAIL_ENABLED:false}
+    from: ${MAIL_FROM:no-reply@myplans.com}
 
 auth:
   internal:
