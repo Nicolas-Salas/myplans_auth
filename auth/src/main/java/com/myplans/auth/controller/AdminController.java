@@ -45,13 +45,18 @@ public class AdminController {
         return ResponseEntity.ok(userService.getAllUsers());
     }
 
-    @Operation(summary = "Mapa id→nombre de todos los usuarios activos", description = "Accesible a AUDITOR y ADMIN para resolver IDs en vistas de auditoría.")
+    @Operation(summary = "Mapa id→nombre de todos los usuarios", description = "Accesible a AUDITOR y ADMIN para resolver IDs en vistas de auditoría. Incluye usuarios inactivos para preservar historial.")
     @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
     @GetMapping("/users/nombres")
     public ResponseEntity<List<Map<String, Object>>> getUserNombres() {
         return ResponseEntity.ok(
             userService.getAllUsers().stream()
-                .map(u -> Map.<String, Object>of("id", u.getId(), "nombre", u.getNombreCompleto()))
+                .map(u -> {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("id", u.getId());
+                    m.put("nombre", u.getNombreCompleto() != null ? u.getNombreCompleto() : "Usuario " + u.getId());
+                    return m;
+                })
                 .toList()
         );
     }

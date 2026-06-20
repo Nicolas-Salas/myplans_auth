@@ -1,6 +1,5 @@
 package com.myplans.auth.security;
 
-import com.myplans.auth.entity.User;
 import com.myplans.auth.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
