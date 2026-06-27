@@ -28,6 +28,8 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,6 +48,9 @@ public class AuthService {
     private final UserDetailsService userDetailsService;
     private final PasswordResetTokenRepository tokenRepository;
     private final EmailService emailService;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public AuthService(UserRepository userRepository,
             RoleRepository roleRepository,
@@ -147,6 +152,7 @@ public class AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         tokenRepository.deleteByUser_Id(user.getId());
+        entityManager.flush();
         String token = UUID.randomUUID().toString();
         PasswordResetToken resetToken = new PasswordResetToken(token, user, LocalDateTime.now().plusMinutes(15));
         tokenRepository.save(resetToken);
